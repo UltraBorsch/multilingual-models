@@ -1,4 +1,5 @@
 import nltk
+import numpy as np
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 from collections import Counter
@@ -12,8 +13,8 @@ from sklearn.metrics import precision_recall_fscore_support
 
 # nltk.download('averaged_perceptron_tagger')
 # nltk.download('wordnet')
-print(torch.__version__)
-print(torch.cuda.is_available())
+print(f"Pytorch version: {torch.__version__}")
+print(f"Cuda available: {torch.cuda.is_available()}")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -95,54 +96,6 @@ def prepare_sequences(sentences, word_to_ix, tag_to_ix):
         sequences.append((torch.tensor(idxs, dtype=torch.long), torch.tensor(tags, dtype=torch.long)))
     return sequences
 
-
-# Example usage
-file_path = 'en_lines-ud-train.conllu'
-sentences = preprocess_data(file_path)
-
-# Step 1: Data Preparation
-# Assuming 'sentences' contains the preprocessed training data
-word_to_ix = build_vocab_index(sentences)
-tag_to_ix = build_tag_index(sentences)
-
-# Convert sentences to indices and pad them
-train_data = prepare_sequences(sentences, word_to_ix, tag_to_ix)
-
-# Step 2: Model Definition
-EMBEDDING_DIM = 128
-HIDDEN_DIM = 256
-model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix)).to(device)
-
-
-# Step 3: Training the Model
-loss_function = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-epochs = 10
-
-for epoch in range(epochs):
-    train_loop = tqdm(train_data, desc=f"Epoch {epoch+1}/{epochs}")
-    hidden = None  # Reset hidden state at the beginning of each epoch
-
-    for sentence, tags in train_loop:
-        sentence, tags = sentence.to(device), tags.to(device)
-
-        # Detach hidden state
-        hidden = tuple(h.detach() for h in hidden) if hidden else None
-
-        model.zero_grad()
-        tag_scores, hidden = model(sentence, hidden)
-        loss = loss_function(tag_scores, tags)
-        loss.backward()
-        optimizer.step()
-
-        train_loop.set_postfix(loss=loss.item())
-
-test_file_path = 'en_lines-ud-test.conllu'  # Make sure this path is correct
-test_sentences = preprocess_data(test_file_path)
-test_data = prepare_sequences(test_sentences, word_to_ix, tag_to_ix)
-
-
 def evaluate_model(model, test_data):
     model.eval()  # Set model to evaluation mode
     all_predictions = []
@@ -157,7 +110,7 @@ def evaluate_model(model, test_data):
             all_predictions.extend(predicted_tags.tolist())
             all_true_labels.extend(tags.tolist())
 
-    precision, recall, f1, _ = precision_recall_fscore_support(all_true_labels, all_predictions, average='weighted')
+    precision, recall, f1, _ = precision_recall_fscore_support(all_true_labels, all_predictions, average='weighted', zero_division=0.0)
     accuracy = sum([1 for true, pred in zip(all_true_labels, all_predictions) if true == pred]) / len(all_true_labels)
 
     print(f'Accuracy: {accuracy:.4f}')
@@ -165,4 +118,84 @@ def evaluate_model(model, test_data):
     print(f'Recall: {recall:.4f}')
     print(f'F1 Score: {f1:.4f}')
 
-evaluate_model(model, test_data)
+
+DATAPATH = "data/lstm/"
+EPOCHS = 20
+LANGUAGES = ["en"]
+EMBEDDING_DIM = 128
+HIDDEN_DIM = 256
+
+for language in LANGUAGES:
+    print(f"Modelling {language}")
+
+    file_path = DATAPATH + language + '/' + language + '_lines-ud-train.conllu'
+    sentences = preprocess_data(file_path)
+
+    file_path = DATAPATH + language + '/' + language + '_lines-ud-dev.conllu'
+    valid_sentences = preprocess_data(file_path)
+
+    # Step 1: Data Preparation
+    # Assuming 'sentences' contains the preprocessed training data
+    word_to_ix = build_vocab_index(sentences)
+    tag_to_ix = build_tag_index(sentences)
+
+    # Convert sentences to indices and pad them
+    train_data = prepare_sequences(sentences, word_to_ix, tag_to_ix)
+    valid_data = prepare_sequences(valid_sentences, word_to_ix, tag_to_ix)
+
+    # Step 2: Model Definition
+    model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix)).to(device)
+
+    # Step 3: Training the Model
+    loss_function = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=0.08, weight_decay=0.0025, momentum=0.9, nesterov=True) # SGD learns slower but more correct iirc
+    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001, amsgrad=True) # Adam learns faster but more wrong iirc
+
+    hidden = None  # Reset hidden state at the beginning of each epoch
+
+    min_valid_loss = np.inf
+
+    for epoch in range(EPOCHS):
+        train_loop = tqdm(train_data, desc=f"Epoch {epoch+1}/{EPOCHS}")
+
+        model.train() #set model to training mode
+
+        train_loss = 0.0
+        for sentence, tags in train_loop:
+            sentence, tags = sentence.to(device), tags.to(device)
+
+            # Detach hidden state
+            hidden = tuple(h.detach() for h in hidden) if hidden else None
+
+            model.zero_grad()
+            tag_scores, hidden = model(sentence, hidden)
+            loss = loss_function(tag_scores, tags)
+            train_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+
+            train_loop.set_postfix(loss=loss.item(), lossSum=train_loss/len(train_loop))
+
+        hidden = None  # Reset hidden state
+        valid_loop = tqdm(valid_data, desc="Validation phase: ")
+        valid_loss = 0.0
+        model.eval()
+        for sentence, tags in valid_loop:
+            sentence, tags = sentence.to(device), tags.to(device)
+
+            tag_scores, hidden = model(sentence, hidden)
+            loss = loss_function(tag_scores, tags)
+            valid_loss += loss.item() 
+
+            valid_loop.set_postfix(ValidationLossSum=valid_loss/len(valid_loop))
+
+        if min_valid_loss > valid_loss:
+            min_valid_loss = valid_loss
+            # Saving State Dict
+            torch.save(model.state_dict(), 'saved_model.pth')
+
+    model.load_state_dict(torch.load('saved_model.pth'))
+    test_file_path = DATAPATH + language + '/' + language + '_lines-ud-test.conllu'  # Make sure this path is correct
+    test_sentences = preprocess_data(test_file_path)
+    test_data = prepare_sequences(test_sentences, word_to_ix, tag_to_ix)
+    evaluate_model(model, test_data)
