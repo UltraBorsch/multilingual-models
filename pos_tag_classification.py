@@ -149,7 +149,7 @@ for language in LANGUAGES:
     # Step 3: Training the Model
     loss_function = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=0.08, weight_decay=0.0025, momentum=0.9, nesterov=True) # SGD learns slower but more correct iirc
-    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001, amsgrad=True) # Adam learns faster but more wrong iirc
+    optimizer = optim.Adam(model.parameters(), lr=0.017, weight_decay=0.0007, amsgrad=True) # Adam learns faster but more wrong iirc
 
     hidden = None  # Reset hidden state at the beginning of each epoch
 
