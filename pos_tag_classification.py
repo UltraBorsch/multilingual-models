@@ -30,37 +30,6 @@ def nltk_tag_to_wordnet_tag(nltk_tag):
         return None
 
 
-# Function to lemmatize a sentence
-def lemmatize_sentence(sentence):
-    lemmatizer = WordNetLemmatizer()
-    nltk_tagged = nltk.pos_tag(nltk.word_tokenize(sentence))
-    wordnet_tagged = map(lambda x: (x[0], nltk_tag_to_wordnet_tag(x[1])), nltk_tagged)
-    lemmatized_sentence = []
-    for word, tag in wordnet_tagged:
-        if tag is None:
-            lemmatized_sentence.append(word)
-        else:
-            lemmatized_sentence.append(lemmatizer.lemmatize(word, tag))
-    return lemmatized_sentence
-
-
-class LSTMTagger(nn.Module):
-
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, tagset_size):
-        super(LSTMTagger, self).__init__()
-        self.hidden_dim = hidden_dim
-
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim)
-        self.hidden2tag = nn.Linear(hidden_dim, tagset_size)
-
-    def forward(self, sentence):
-        embeds = self.word_embeddings(sentence)
-        lstm_out, _ = self.lstm(embeds.view(len(sentence), 1, -1))
-        tag_space = self.hidden2tag(lstm_out.view(len(sentence), -1))
-        tag_scores = torch.log_softmax(tag_space, dim=1)
-        return tag_scores
-
 class LSTMTagger(nn.Module):
 
     def __init__(self, embedding_dim, hidden_dim, vocab_size, tagset_size):
@@ -77,21 +46,6 @@ class LSTMTagger(nn.Module):
         tag_space = self.hidden2tag(lstm_out.view(len(sentence), -1))
         tag_scores = torch.log_softmax(tag_space, dim=1)
         return tag_scores, hidden
-
-def preprocess_data(file_path):
-    data = []
-    with open(file_path, 'r', encoding='utf-8') as file:
-        for line in file:
-            if line.startswith('#'):
-                continue
-            parts = line.strip().split('\t')
-            if len(parts) > 3:
-                word, pos_tag = parts[1], parts[3]
-                # Skip words with POS tags PUNCT, SYM, or X
-                if pos_tag in ['PUNCT', 'SYM', 'X']:
-                    continue
-                data.append((word, pos_tag))
-    return pd.DataFrame(data, columns=['word', 'pos_tag'])
 
 
 def preprocess_data(file_path):
