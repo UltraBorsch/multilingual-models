@@ -120,18 +120,18 @@ def evaluate_model(model, test_data):
 
 
 DATAPATH = "data/lstm/"
-EPOCHS = 20
-LANGUAGES = ["en"]
+EPOCHS = 10
+LANGUAGES = ["en", "de", "fr", "zh", "ar"]
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
 
 for language in LANGUAGES:
     print(f"Modelling {language}")
 
-    file_path = DATAPATH + language + '/' + language + '_lines-ud-train.conllu'
+    file_path = DATAPATH + language + '/' + language + '-ud-train.conllu'
     sentences = preprocess_data(file_path)
 
-    file_path = DATAPATH + language + '/' + language + '_lines-ud-dev.conllu'
+    file_path = DATAPATH + language + '/' + language + '-ud-dev.conllu'
     valid_sentences = preprocess_data(file_path)
 
     # Step 1: Data Preparation
@@ -195,7 +195,7 @@ for language in LANGUAGES:
             torch.save(model.state_dict(), 'saved_model.pth')
 
     model.load_state_dict(torch.load('saved_model.pth'))
-    test_file_path = DATAPATH + language + '/' + language + '_lines-ud-test.conllu'  # Make sure this path is correct
+    test_file_path = DATAPATH + language + '/' + language + '-ud-test.conllu'  # Make sure this path is correct
     test_sentences = preprocess_data(test_file_path)
     test_data = prepare_sequences(test_sentences, word_to_ix, tag_to_ix)
     evaluate_model(model, test_data)
