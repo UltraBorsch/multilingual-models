@@ -157,7 +157,8 @@ train_data = prepare_sequences(sentences, word_to_ix, tag_to_ix)
 # Step 2: Model Definition
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
-model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix))
+model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix)).to(device)
+
 
 # Step 3: Training the Model
 loss_function = nn.CrossEntropyLoss()
