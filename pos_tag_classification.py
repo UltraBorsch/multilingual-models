@@ -120,8 +120,8 @@ def evaluate_model(model, test_data):
 
 
 DATAPATH = "data/lstm/"
-EPOCHS = 10
-LANGUAGES = ["en", "de", "fr", "zh", "ar"]
+EPOCHS = 30
+LANGUAGES = ["en", "fr", "es", "de", "ru", "zh", "ja", "ko", "fa", "ar"]
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
 
@@ -149,7 +149,7 @@ for language in LANGUAGES:
     # Step 3: Training the Model
     loss_function = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=0.08, weight_decay=0.0025, momentum=0.9, nesterov=True) # SGD learns slower but more correct iirc
-    optimizer = optim.Adam(model.parameters(), lr=0.017, weight_decay=0.0007, amsgrad=True) # Adam learns faster but more wrong iirc
+    optimizer = optim.Adam(model.parameters(), lr=0.018, weight_decay=0.0008, amsgrad=True) # Adam learns faster but more wrong iirc
 
     hidden = None  # Reset hidden state at the beginning of each epoch
 
