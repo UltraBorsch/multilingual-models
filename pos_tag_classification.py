@@ -119,11 +119,16 @@ def evaluate_model(model, test_data):
     print(f'F1 Score: {f1:.4f}')
 
 
-DATAPATH = "data/lstm/"
-EPOCHS = 30
-LANGUAGES = ["en", "fr", "es", "de", "ru", "zh", "ja", "ko", "fa", "ar"]
+DATAPATH = "data/lstm/" # location of data folder relative to the program
+EPOCHS = 30 # number of epochs to run each model for
+LIMITDATA = True # whether or not to limit all datasets to the size of the first one. note does not effect evaluation
+LANGUAGES = ["en", "fr", "es", "de", "ru", "zh", "ja", "ko", "fa", "ar"] # languages considered
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
+
+first_language = True
+train_size = 0;
+valid_size = 0;
 
 for language in LANGUAGES:
     print(f"Modelling {language}")
@@ -143,6 +148,11 @@ for language in LANGUAGES:
     train_data = prepare_sequences(sentences, word_to_ix, tag_to_ix)
     valid_data = prepare_sequences(valid_sentences, word_to_ix, tag_to_ix)
 
+    if first_language:
+        train_size = len(train_data)
+        valid_size = len(valid_data)
+        first_language = False
+
     # Step 2: Model Definition
     model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix)).to(device)
 
@@ -156,7 +166,7 @@ for language in LANGUAGES:
     min_valid_loss = np.inf
 
     for epoch in range(EPOCHS):
-        train_loop = tqdm(train_data, desc=f"Epoch {epoch+1}/{EPOCHS}")
+        train_loop = tqdm(train_data[:min(len(train_data), train_size)], desc=f"Epoch {epoch+1}/{EPOCHS}")
 
         model.train() #set model to training mode
 
@@ -177,7 +187,7 @@ for language in LANGUAGES:
             train_loop.set_postfix(loss=loss.item(), lossSum=train_loss/len(train_loop))
 
         hidden = None  # Reset hidden state
-        valid_loop = tqdm(valid_data, desc="Validation phase: ")
+        valid_loop = tqdm(valid_data[:min(len(valid_data), valid_size)], desc="Validation phase: ")
         valid_loss = 0.0
         model.eval()
         for sentence, tags in valid_loop:
