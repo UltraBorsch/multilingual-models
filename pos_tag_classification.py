@@ -36,7 +36,7 @@ class LSTMTagger(nn.Module):
     def __init__(self, embedding_dim, hidden_dim, vocab_size, tagset_size):
         super(LSTMTagger, self).__init__()
         self.hidden_dim = hidden_dim
-
+        # layers
         self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim)
         self.hidden2tag = nn.Linear(hidden_dim, tagset_size)
@@ -50,6 +50,7 @@ class LSTMTagger(nn.Module):
 
 
 def preprocess_data(file_path):
+    # preprocess data from the file
     sentences = []
     current_sentence = []
 
@@ -60,20 +61,21 @@ def preprocess_data(file_path):
                     sentences.append(current_sentence)
                     current_sentence = []
                 continue
-
+            # Splitting the line and exracting word and tag
             parts = line.strip().split('\t')
             if len(parts) > 3:
                 word, pos_tag = parts[1], parts[3]
                 if pos_tag not in ['PUNCT', 'SYM', 'X']:
                     current_sentence.append((word, pos_tag))
 
-    if current_sentence:  # Add the last sentence if file doesn't end with a comment
+    if current_sentence:
         sentences.append(current_sentence)
 
     return sentences
 
 def build_vocab_index(sentences):
-    word_to_ix = {"<UNK>": 0}  # Add an unknown token
+    # adding the unknown token
+    word_to_ix = {"<UNK>": 0}
     for sentence in sentences:
         for word, _ in sentence:
             if word not in word_to_ix:
@@ -91,13 +93,13 @@ def build_tag_index(sentences):
 def prepare_sequences(sentences, word_to_ix, tag_to_ix):
     sequences = []
     for sentence in sentences:
-        idxs = [word_to_ix.get(word, word_to_ix["<UNK>"]) for word, _ in sentence]  # Use get() with default
+        idxs = [word_to_ix.get(word, word_to_ix["<UNK>"]) for word, _ in sentence]
         tags = [tag_to_ix[tag] for _, tag in sentence]
         sequences.append((torch.tensor(idxs, dtype=torch.long), torch.tensor(tags, dtype=torch.long)))
     return sequences
 
 def evaluate_model(model, test_data):
-    model.eval()  # Set model to evaluation mode
+    model.eval()
     all_predictions = []
     all_true_labels = []
 
@@ -139,12 +141,9 @@ for language in LANGUAGES:
     file_path = DATAPATH + language + '/' + language + '-ud-dev.conllu'
     valid_sentences = preprocess_data(file_path)
 
-    # Step 1: Data Preparation
-    # Assuming 'sentences' contains the preprocessed training data
     word_to_ix = build_vocab_index(sentences)
     tag_to_ix = build_tag_index(sentences)
 
-    # Convert sentences to indices and pad them
     train_data = prepare_sequences(sentences, word_to_ix, tag_to_ix)
     valid_data = prepare_sequences(valid_sentences, word_to_ix, tag_to_ix)
 
@@ -153,23 +152,20 @@ for language in LANGUAGES:
         valid_size = len(valid_data)
         first_language = False
 
-    # Step 2: Model Definition
     model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(word_to_ix), len(tag_to_ix)).to(device)
 
-    # Step 3: Training the Model
     loss_function = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=0.08, weight_decay=0.0025, momentum=0.9, nesterov=True) # SGD learns slower but more correct iirc
     optimizer = optim.Adam(model.parameters(), lr=0.018, weight_decay=0.0008, amsgrad=True) # Adam learns faster but more wrong iirc
 
-    hidden = None  # Reset hidden state at the beginning of each epoch
+    hidden = None
 
     min_valid_loss = np.inf
 
     for epoch in range(EPOCHS):
         train_loop = tqdm(train_data[:min(len(train_data), train_size)], desc=f"Epoch {epoch+1}/{EPOCHS}")
 
-        model.train() #set model to training mode
-
+        model.train()
         train_loss = 0.0
         for sentence, tags in train_loop:
             sentence, tags = sentence.to(device), tags.to(device)
@@ -186,7 +182,7 @@ for language in LANGUAGES:
 
             train_loop.set_postfix(loss=loss.item(), lossSum=train_loss/len(train_loop))
 
-        hidden = None  # Reset hidden state
+        hidden = None
         valid_loop = tqdm(valid_data[:min(len(valid_data), valid_size)], desc="Validation phase: ")
         valid_loss = 0.0
         model.eval()
@@ -195,7 +191,7 @@ for language in LANGUAGES:
 
             tag_scores, hidden = model(sentence, hidden)
             loss = loss_function(tag_scores, tags)
-            valid_loss += loss.item() 
+            valid_loss += loss.item()
 
             valid_loop.set_postfix(ValidationLossSum=valid_loss/len(valid_loop))
 
@@ -205,7 +201,7 @@ for language in LANGUAGES:
             torch.save(model.state_dict(), 'saved_model.pth')
 
     model.load_state_dict(torch.load('saved_model.pth'))
-    test_file_path = DATAPATH + language + '/' + language + '-ud-test.conllu'  # Make sure this path is correct
+    test_file_path = DATAPATH + language + '/' + language + '-ud-test.conllu'
     test_sentences = preprocess_data(test_file_path)
     test_data = prepare_sequences(test_sentences, word_to_ix, tag_to_ix)
     evaluate_model(model, test_data)
